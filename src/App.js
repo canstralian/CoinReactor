@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircleIcon, WarningIcon } from "@chakra-ui/icons";
+import { CheckCircleIcon, WarningIcon, MoonIcon, SunIcon } from "@chakra-ui/icons";
 import {
   Box,
   Button,
@@ -9,13 +9,16 @@ import {
   Text,
   Tooltip,
   VStack,
-  useDisclosure
+  useDisclosure,
+  useColorMode,
+  IconButton
 } from "@chakra-ui/react";
 import SelectWalletModal from "./Modal";
 import { toHex, truncateAddress } from "./utils";
 
 export default function Home() {
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { colorMode, toggleColorMode } = useColorMode();
 
   const [provider, setProvider] = useState();
   const [account, setAccount] = useState();
@@ -26,6 +29,21 @@ export default function Home() {
   const [message, setMessage] = useState("");
   const [signedMessage, setSignedMessage] = useState("");
   const [verified, setVerified] = useState();
+  const [balance, setBalance] = useState("");
+
+  const fetchBalance = async (provider, account) => {
+    try {
+      const balance = await provider.request({
+        method: "eth_getBalance",
+        params: [account, "latest"]
+      });
+      // Convert from wei to ETH
+      const balanceInEth = parseInt(balance, 16) / Math.pow(10, 18);
+      setBalance(balanceInEth.toFixed(4));
+    } catch (error) {
+      console.error("Error fetching balance:", error);
+    }
+  };
 
   const connectWithProvider = async (provider) => {
     try {
@@ -36,6 +54,8 @@ export default function Home() {
       });
       if (accounts) {
         setAccount(accounts[0]);
+        // Fetch balance for the connected account
+        await fetchBalance(provider, accounts[0]);
       }
       // Get current chain ID for connected wallet
       const chainId = await provider.request({
@@ -102,6 +122,7 @@ export default function Home() {
     setMessage("");
     setSignature("");
     setVerified(undefined);
+    setBalance("");
   };
 
   const disconnect = () => {
@@ -110,9 +131,12 @@ export default function Home() {
 
   useEffect(() => {
     if (provider?.on) {
-      const handleAccountsChanged = (accounts) => {
+      const handleAccountsChanged = async (accounts) => {
         console.log("accountsChanged", accounts);
-        if (accounts) setAccount(accounts[0]);
+        if (accounts) {
+          setAccount(accounts[0]);
+          await fetchBalance(provider, accounts[0]);
+        }
       };
 
       const handleChainChanged = (_hexChainId) => {
@@ -142,12 +166,20 @@ export default function Home() {
 
   return (
     <>
-      <Text position="absolute" top={0} right="40px">
-        If you're in a sandbox, first "Open in new tab"{" "}
-        <span role="img" aria-label="up-arrow">
-          ⬆️
-        </span>
-      </Text>
+      <HStack position="absolute" top="10px" right="10px" spacing={4}>
+        <IconButton
+          aria-label="Toggle theme"
+          icon={colorMode === "light" ? <MoonIcon /> : <SunIcon />}
+          onClick={toggleColorMode}
+          variant="ghost"
+        />
+        <Text>
+          If you're in a sandbox, first "Open in new tab"{" "}
+          <span role="img" aria-label="up-arrow">
+            ⬆️
+          </span>
+        </Text>
+      </HStack>
       <VStack justifyContent="center" alignItems="center" h="100vh">
         <VStack marginBottom="10px">
           <Text
@@ -193,6 +225,7 @@ export default function Home() {
             <Text>{`Account: ${truncateAddress(account)}`}</Text>
           </Tooltip>
           <Text>{`Network ID: ${chainId ? chainId : "No Network"}`}</Text>
+          {balance && <Text>{`Balance: ${balance} ETH`}</Text>}
         </VStack>
         {account && (
           <HStack justifyContent="flex-start" alignItems="flex-start">
